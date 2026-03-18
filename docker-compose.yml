@@ -34,7 +34,7 @@ services:
     ports:
       # Expose to host for direct access with psql or a DB GUI
       # Remove this in production if the DB should not be publicly accessible
-      - "5432:5432"
+      - "5431:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
