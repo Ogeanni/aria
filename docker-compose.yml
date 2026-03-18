@@ -1,0 +1,189 @@
+# ─────────────────────────────────────────────────────────────────────
+# ARIA docker-compose.yml
+# Runs the complete ARIA stack locally:
+#   - postgres:  PostgreSQL 16 database
+#   - redis:     Redis cache (optional — falls back to file cache)
+#   - migrate:   One-shot container that runs Alembic migrations
+#   - seed:      One-shot container that seeds initial data (first run only)
+#   - agent:     The ARIA agent (runs on schedule)
+#
+# Usage:
+#   docker compose up -d              # Start full stack
+#   docker compose up -d agent        # Start just the agent (db must be running)
+#   docker compose logs -f agent      # Follow agent logs
+#   docker compose run agent python agent/aria.py --once   # Single run
+#   docker compose run agent python agent/aria.py --status # Status report
+#   docker compose down               # Stop everything
+#   docker compose down -v            # Stop + delete volumes (DESTROYS DATA)
+# ─────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL database ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: aria_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # Named volume — data persists across container restarts
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Expose to host for direct access with psql or a DB GUI
+      # Remove this in production if the DB should not be publicly accessible
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - aria_network
+
+  # ── Redis cache ─────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: aria_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - aria_network
+
+  # ── Database migrations ─────────────────────────────────────────────
+  # Runs once on startup, applies all pending Alembic migrations, then exits.
+  # The 'agent' service waits for this to complete before starting.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: aria_migrate
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aria_network
+    # restart: "no" means this container runs once and is done
+    restart: "no"
+
+  # ── Database seeder ─────────────────────────────────────────────────
+  # Runs once to populate initial product data.
+  # Safe to run multiple times — skips existing products by SKU.
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: aria_seed
+    command: ["python", "scripts/seed_db.py"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - aria_network
+    restart: "no"
+
+  # ── ARIA Agent ──────────────────────────────────────────────────────
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: aria_agent
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Override database URL to use Docker service name instead of localhost
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      DEMO_MODE: ${DEMO_MODE:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      # Mount directories that need to persist across container restarts
+      # Models: trained ML models (re-training takes time)
+      - ./models:/app/models
+      # Data: feature matrices and cache
+      - ./data:/app/data
+      # Logs: structured event log
+      - ./logs:/app/logs
+      # Results: predictions and reports
+      - ./results:/app/results
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - aria_network
+    # Override default CMD for different run modes:
+    # docker compose run agent python agent/aria.py --once
+    # docker compose run agent python agent/aria.py --status
+    # docker compose run agent python monitoring/metrics.py
+
+  # ── One-off task runner ─────────────────────────────────────────────
+  # Use this service to run any ARIA script without starting the full agent.
+  # Example: docker compose run cli python src/pricing_model.py --evaluate
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: aria_cli
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./results:/app/results
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aria_network
+    profiles:
+      # Only starts when explicitly requested — not part of default 'up'
+      - tools
+    restart: "no"
+
+
+# ── Volumes ─────────────────────────────────────────────────────────────
+# Named volumes managed by Docker — survive container removal
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+
+# ── Networks ─────────────────────────────────────────────────────────────
+# Private network — containers communicate by service name, not IP
+networks:
+  aria_network:
+    driver: bridge

@@ -1,0 +1,175 @@
+# .github/workflows/ci.yml
+# ARIA Continuous Integration
+#
+# Runs on every push and pull request to main.
+# Checks that:
+#   1. All tests pass
+#   2. The Docker image builds successfully
+#   3. Database migrations apply cleanly
+#
+# Deployment is manual — push to Railway from your local machine
+# or via Railway's GitHub integration after tests pass.
+#
+# To view results: GitHub repo → Actions tab
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs when a new commit is pushed to the same branch
+# Prevents queuing up multiple runs for rapid pushes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ── Test suite ────────────────────────────────────────────────────
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    services:
+      # Spin up a real Postgres for integration tests
+      # Uses the same version as production (postgres:16)
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB:       aria_test
+          POSTGRES_USER:     aria_test
+          POSTGRES_PASSWORD: aria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Test environment — uses real Postgres, demo mode on
+      DATABASE_URL:       postgresql://aria_test:aria_test@localhost:5432/aria_test
+      DEMO_MODE:          "true"
+      LOG_LEVEL:          WARNING
+      REDIS_URL:          ""
+      SERPAPI_KEY:        ""
+      ANTHROPIC_API_KEY:  "test-key-ci"
+      PYTHONPATH:         ${{ github.workspace }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          # Cache pip dependencies — speeds up subsequent runs
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run database migrations
+        run: alembic upgrade head
+
+      - name: Run test suite
+        run: |
+          python -m pytest tests/ \
+            --verbose \
+            --tb=short \
+            -q
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            .pytest_cache/
+          retention-days: 7
+
+  # ── Docker build check ────────────────────────────────────────────
+  docker:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    # Only run after tests pass — no point building a broken image
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          # Don't push — just verify the build succeeds
+          push: false
+          # Cache layers between runs — speeds up builds significantly
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Build the runtime stage only (not builder)
+          target: runtime
+          # Tag for reference in logs
+          tags: aria:ci-${{ github.sha }}
+
+  # ── Migration check ───────────────────────────────────────────────
+  migrations:
+    name: Verify migrations
+    runs-on: ubuntu-latest
+    needs: test
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB:       aria_migrations
+          POSTGRES_USER:     aria_migrations
+          POSTGRES_PASSWORD: aria_migrations
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://aria_migrations:aria_migrations@localhost:5432/aria_migrations
+      PYTHONPATH:   ${{ github.workspace }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply migrations (upgrade)
+        run: alembic upgrade head
+
+      - name: Verify migration state
+        run: alembic current
+
+      - name: Test rollback (downgrade one)
+        run: alembic downgrade -1
+
+      - name: Re-apply (upgrade back)
+        run: alembic upgrade head
