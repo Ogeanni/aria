@@ -38,7 +38,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-API_BASE = "http://localhost:8000"
+API_BASE = "http://localhost:8900"
 
 from config.settings import get_settings
 settings = get_settings()
@@ -138,7 +138,7 @@ if page == "🏠 Overview":
     with col2:
         st.warning("**Layer 2 — XGBoost ML**\n\n~30% of decisions\n\nFast · Cheap · Local model")
     with col3:
-        st.error("**Layer 3 — LLM**\n\n~10% of decisions\n\nEdge cases only · Reserved")
+        st.error("**Layer 3 — LLM (Claude)**\n\n~10% of decisions\n\nEdge cases only · Reserved")
 
     st.divider()
 
@@ -185,9 +185,10 @@ elif page == "🛒 Products":
         st.error(err)
     elif data:
         df = pd.DataFrame(data)
+        # Ensure optional columns exist even if API returns None/missing
         df["current_price"] = df["current_price"].apply(fmt_price)
-        df["min_price"]     = df["min_price"].apply(lambda x: fmt_price(x) if x else "—")
-        df["max_price"]     = df["max_price"].apply(lambda x: fmt_price(x) if x else "—")
+        df["min_price"]     = df.get("min_price", pd.Series(["—"] * len(df))).apply(lambda x: fmt_price(x) if x else "—")
+        df["max_price"]     = df.get("max_price", pd.Series(["—"] * len(df))).apply(lambda x: fmt_price(x) if x else "—")
 
         st.dataframe(
             df[["id", "name", "category", "current_price",

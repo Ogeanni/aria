@@ -1,57 +1,40 @@
 #!/bin/sh
-# ─────────────────────────────────────────────────────────────────────
 # docker-entrypoint.sh
-# Runs automatically when the Docker container starts.
-#
-# Steps:
-#   1. Wait for PostgreSQL to be ready
-#   2. Run any pending database migrations
-#   3. Execute the command passed to the container (default: agent)
-#
-# Why we wait for Postgres here AND have depends_on in docker-compose:
-#   depends_on with healthcheck handles Docker networking.
-#   This script handles the case where the DB is technically reachable
-#   but not yet fully initialised (accepting connections but not queries).
-# ─────────────────────────────────────────────────────────────────────
+# 1. Wait for Postgres to accept connections
+# 2. Run Alembic migrations
+# 3. Start the app
+
 set -e
 
 echo "ARIA entrypoint starting..."
 
-# ── Wait for PostgreSQL ───────────────────────────────────────────────
-if [ -n "$DATABASE_URL" ]; then
-    echo "Waiting for database..."
-    # Extract host and port from DATABASE_URL
-    # Format: postgresql://user:pass@host:port/dbname
-    DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:/]+).*|\1|')
-    DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
-    DB_PORT=${DB_PORT:-5432}
+# ── Wait for Postgres ─────────────────────────────────────────────────
+# Extract host and port from DATABASE_URL
+# DATABASE_URL format: postgresql://user:pass@host:port/dbname
+DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|postgresql://[^@]+@([^:/]+).*|\1|')
+DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
+DB_PORT=${DB_PORT:-5432}
 
-    MAX_RETRIES=30
-    RETRY=0
-    until python -c "
-import psycopg2, os, sys
-try:
-    psycopg2.connect(os.environ['DATABASE_URL'])
-    sys.exit(0)
-except Exception as e:
-    sys.exit(1)
-" 2>/dev/null; do
-        RETRY=$((RETRY+1))
-        if [ $RETRY -ge $MAX_RETRIES ]; then
-            echo "Database not ready after $MAX_RETRIES attempts. Exiting."
-            exit 1
-        fi
-        echo "  Database not ready (attempt $RETRY/$MAX_RETRIES) — retrying in 2s..."
-        sleep 2
-    done
-    echo "Database ready."
-fi
+echo "Waiting for postgres at $DB_HOST:$DB_PORT..."
+
+i=0
+while ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -q; do
+    i=$((i+1))
+    if [ $i -ge 30 ]; then
+        echo "Postgres not ready after 30 attempts. Exiting."
+        exit 1
+    fi
+    echo "  attempt $i/30 — retrying in 2s..."
+    sleep 2
+done
+
+echo "Postgres ready."
 
 # ── Run migrations ────────────────────────────────────────────────────
-echo "Running database migrations..."
+echo "Running migrations..."
 alembic upgrade head
 echo "Migrations complete."
 
-# ── Execute main command ──────────────────────────────────────────────
+# ── Start app ────────────────────────────────────────────────────────
 echo "Starting: $@"
 exec "$@"
