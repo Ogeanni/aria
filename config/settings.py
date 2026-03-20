@@ -66,6 +66,23 @@ class Settings(BaseSettings):
 
     # ── Monitoring ────────────────────────────────────────────────────
     log_level: str = Field(default="INFO")
+
+
+    # ── AWS S3 Model Store ────────────────────────────────────────────
+    aws_access_key_id:     Optional[str] = Field(default=None)
+    aws_secret_access_key: Optional[str] = Field(default=None)
+    s3_bucket_name:        Optional[str] = Field(default=None)
+    s3_region:             str           = Field(default="us-east-1")
+    s3_model_prefix:       str           = Field(default="aria-models")
+
+    @property
+    def has_s3(self) -> bool:
+        return bool(
+            self.aws_access_key_id and
+            self.aws_secret_access_key and
+            self.s3_bucket_name and
+            "your" not in (self.aws_access_key_id or "").lower()
+        )
     langfuse_enabled: bool = Field(default=False)
     langfuse_public_key: Optional[str] = Field(default=None)
     langfuse_secret_key: Optional[str] = Field(default=None)
