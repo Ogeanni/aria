@@ -139,7 +139,7 @@ if page == "🏠 Overview":
     with col2:
         st.warning("**Layer 2 — XGBoost ML**\n\n~30% of decisions\n\nFast · Cheap · Local model")
     with col3:
-        st.error("**Layer 3 — LLM (Claude)**\n\n~10% of decisions\n\nEdge cases only · Reserved")
+        st.error("**Layer 3 — LLM**\n\n~10% of decisions\n\nEdge cases only · Reserved")
 
     st.divider()
 
