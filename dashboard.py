@@ -451,13 +451,14 @@ elif page == "📊 Metrics":
                 st.success("All checks passing — no alerts fired.")
             else:
                 for alert in alerts_data["alerts"]:
-                    level = alert.get("level", "WARNING")
-                    msg   = alert.get("message", "")
-                    action = alert.get("recommended_action", "")
+                    level      = alert.get("level", "WARNING")
+                    msg        = alert.get("message", alert.get("type", "Unknown alert"))
+                    action     = alert.get("recommended_action", "")
+                    alert_name = alert.get("alert_type", alert.get("type", "Alert"))
                     if level == "CRITICAL":
-                        st.error(f"**{alert['alert_type']}**: {msg}\n\n*{action}*")
+                        st.error(f"**{alert_name}**: {msg}\n\n*{action}*")
                     else:
-                        st.warning(f"**{alert['alert_type']}**: {msg}\n\n*{action}*")
+                        st.warning(f"**{alert_name}**: {msg}\n\n*{action}*")
 
 
 # ── Recommendations ───────────────────────────────────────────────────
