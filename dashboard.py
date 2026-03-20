@@ -38,7 +38,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-API_BASE = "http://localhost:8900"
+import os
+API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 
 from config.settings import get_settings
 settings = get_settings()
