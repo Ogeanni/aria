@@ -67,7 +67,6 @@ class Settings(BaseSettings):
     # ── Monitoring ────────────────────────────────────────────────────
     log_level: str = Field(default="INFO")
 
-
     # ── AWS S3 Model Store ────────────────────────────────────────────
     aws_access_key_id:     Optional[str] = Field(default=None)
     aws_secret_access_key: Optional[str] = Field(default=None)
@@ -137,9 +136,9 @@ class Settings(BaseSettings):
     @property
     def llm_api_key(self) -> Optional[str]:
         """Returns the active LLM API key based on provider setting."""
-        if self.llm_provider == "openai":
-            return self.openai_api_key
-        return self.anthropic_api_key
+        if self.llm_provider == "anthropic":
+            return self.anthropic_api_key
+        return self.openai_api_key
 
     @property
     def has_serpapi(self) -> bool:
@@ -152,6 +151,32 @@ class Settings(BaseSettings):
     class Config:
         env_file = str(ROOT / ".env")
         env_file_encoding = "utf-8"
+        extra = "ignore"   # ignore unknown env vars like POSTGRES_USER etc
+        # Environment variables take priority over .env file.
+        # This is the industry standard — allows overriding .env
+        # via shell export or CI/CD secrets without editing files.
+        # e.g. export DATABASE_URL=... overrides .env DATABASE_URL
+        env_nested_delimiter = "__"
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        **kwargs,
+    ):
+        # Priority order (highest to lowest):
+        # 1. init_settings — passed directly to constructor
+        # 2. env_settings  — shell environment variables (export KEY=val)
+        # 3. dotenv_settings — .env file
+        # env_settings before dotenv_settings means shell export wins
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+        )
         case_sensitive = False
         extra = "ignore"
 
