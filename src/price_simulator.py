@@ -13,7 +13,7 @@ Design:
   The simulator produces statistically credible data that behaves like
   a real market: price variance, outliers, platform-specific patterns.
 
-This is a deliberate engineering choice:
+This is a deliberate choice:
   "Build a statistical price simulator so the system works end-to-end
    without API costs. Same distributions as real data — zero API cost."
 

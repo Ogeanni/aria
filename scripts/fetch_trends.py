@@ -2,11 +2,6 @@
 scripts/fetch_trends.py
 Google Trends demand signal ingestion for ARIA.
 
-WHY NOT PYTRENDS:
-  pytrends was archived by its owner in April 2025 and is fundamentally
-  broken. Google actively blocks it. It is not suitable for production
-  or portfolio projects.
-
 DATA SOURCE HIERARCHY (same fallback pattern as fetch_competitors.py):
   1. Redis/file cache  — if fresh data exists (< 24h), return immediately
   2. SerpAPI           — Google Trends via official API (uses free credits)
@@ -20,9 +15,6 @@ SerpAPI Google Trends docs:
 
 Usage:
     python scripts/fetch_trends.py                    # all categories
-    python scripts/fetch_trends.py --category sports
-    python scripts/fetch_trends.py --dry-run
-    python scripts/fetch_trends.py --demo             # force simulator
 """
 import os
 import sys
@@ -95,9 +87,7 @@ VALID_CATEGORIES = list(CATEGORY_KEYWORDS.keys())
 class TrendsCache:
     """
     Simple file-based cache for trends data.
-    TTL: 168 hours / 7 days (trends data is weekly — one fetch per week is enough)
-    This protects your SerpAPI credits from accidental repeat runs.
-    Use --refresh flag to force a new fetch when needed.
+    TTL: 168 hours / 7 days (trends data is weekly — one fetch per week)
     """
     TTL_HOURS = 168  # 7 days
 
@@ -231,7 +221,7 @@ class SerpAPITrendsFetcher:
     def _parse_date(date_str: str) -> Optional[date]:
         """
         Parse SerpAPI date strings to date objects.
-        Handles formats like "Nov 27 – Dec 3, 2022" and "2022-11-27"
+        Handles formats like "Nov 27 - Dec 3, 2022" and "2022-11-27"
         """
         if not date_str:
             return None
@@ -246,7 +236,7 @@ class SerpAPITrendsFetcher:
         try:
             from dateutil import parser as dateutil_parser
             # Take the part before the dash
-            start_part = date_str.split("–")[0].strip()
+            start_part = date_str.split("-")[0].strip()
             # Add year if missing (take from end of full string)
             if not any(str(y) in start_part for y in range(2020, 2030)):
                 year_match = date_str.split(",")[-1].strip()
@@ -283,9 +273,8 @@ class TrendsSimulator:
     Uses the same seasonal patterns as seed_db.py but generates them
     fresh on demand with controllable parameters.
 
-    Why this is defensible in a production portfolio:
-    "We simulate demand signals using category-specific seasonal models
-     seeded from historical Google Trends patterns. This gives us
+    "Simulate demand signals using category-specific seasonal models
+     seeded from historical Google Trends patterns. This generate
      statistically realistic training data without API costs, and
      the system switches to live SerpAPI data in production."
     """

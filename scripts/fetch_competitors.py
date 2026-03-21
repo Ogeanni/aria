@@ -8,19 +8,11 @@ Data source hierarchy (fallback chain):
   3. SerpAPI         — live Google Shopping data (costs credits)
   4. Price simulator — realistic synthetic data (free, always works)
 
-This implements the playbook principle:
-  "Every external dependency needs a fallback. Never let one API
-   failure take down your serving layer."
-
 DEMO_MODE=true  → skips SerpAPI entirely, uses simulator
 DEMO_MODE=false → tries SerpAPI, falls back to simulator on failure
 
 Usage:
     python scripts/fetch_competitors.py              # all products
-    python scripts/fetch_competitors.py --category sports
-    python scripts/fetch_competitors.py --product-id 1
-    python scripts/fetch_competitors.py --dry-run
-    python scripts/fetch_competitors.py --demo       # force simulator
 """
 import os
 import sys
@@ -164,8 +156,6 @@ class PriceCache:
 class SerpAPIFetcher:
     """
     Fetches competitor prices from Google Shopping via SerpAPI.
-
-    Free tier: 100 searches/month
     We conserve credits by:
       1. Always checking cache before calling
       2. Grouping products by keyword (shared keywords = 1 call)
