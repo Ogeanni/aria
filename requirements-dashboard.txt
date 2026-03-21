@@ -1,0 +1,8 @@
+# requirements-dashboard.txt
+# Streamlit Cloud dependencies — dashboard only
+# Intentionally lightweight — no ML libraries needed
+# The dashboard calls the FastAPI backend for all data
+
+streamlit>=1.32.0
+requests>=2.31.0
+pandas>=2.0.0
