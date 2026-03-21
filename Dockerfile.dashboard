@@ -1,0 +1,41 @@
+# Dockerfile.dashboard
+# Streamlit dashboard service
+# Lightweight — only needs Python, Streamlit, and requests
+# No ML libraries, no database drivers, no heavy dependencies
+
+FROM python:3.11-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install only what Streamlit needs
+RUN pip install --no-cache-dir \
+    streamlit>=1.32.0 \
+    requests>=2.31.0 \
+    pandas>=2.0.0 \
+    pydantic>=2.0.0 \
+    pydantic-settings>=2.0.0 \
+    python-dotenv>=1.0.0
+
+# Non-root user
+RUN groupadd -r aria && useradd -r -g aria aria
+
+WORKDIR /app
+
+# Only copy what the dashboard needs
+COPY --chown=aria:aria dashboard.py .
+COPY --chown=aria:aria config/ config/
+COPY --chown=aria:aria .streamlit/ .streamlit/
+
+USER aria
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+# Health check — verify Streamlit is responding
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8501}/_stcore/health || exit 1
+
+CMD ["sh", "-c", "streamlit run dashboard.py --server.port $PORT --server.address 0.0.0.0"]
