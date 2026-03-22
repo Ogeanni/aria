@@ -111,7 +111,6 @@ with st.sidebar:
     page = st.radio("Navigate", [
         "🏠 Overview",
         "🛒 Products",
-        "⚡ Run Agent",
         "📋 Decisions",
         "✅ Approvals",
         "📊 Metrics",
@@ -200,7 +199,7 @@ elif page == "🛒 Products":
         st.caption(f"{len(df)} products")
 
 
-# ── Run Agent ─────────────────────────────────────────────────────────
+# ── Run Agent (disabled for public — use API directly) ───────────────
 
 elif page == "⚡ Run Agent":
     st.title("Run Agent")
@@ -312,6 +311,7 @@ elif page == "✅ Approvals":
     Price changes exceeding **±{settings.agent_auto_approve_max_pct}%** require human review.
     ARIA holds them here until approved or rejected.
     """)
+    st.info("👀 View-only mode — approve/reject actions are disabled for public access.")
 
     if st.button("🔄 Refresh"):
         st.rerun()
@@ -343,33 +343,14 @@ elif page == "✅ Approvals":
                                          key=f"name_{item['id']}")
 
                 with col_a:
-                    if st.button("✅ Approve", key=f"approve_{item['id']}",
-                                 type="primary"):
-                        result, err2 = api(
-                            "post", f"/agent/approve/{item['id']}",
-                            json={"reviewed_by": reviewer}
-                        )
-                        if err2:
-                            st.error(err2)
-                        else:
-                            st.success(
-                                f"Approved! New price: {fmt_price(result['new_price'])}"
-                            )
-                            time.sleep(1)
-                            st.rerun()
+                    st.button("✅ Approve", key=f"approve_{item['id']}",
+                             type="primary", disabled=True,
+                             help="Disabled in public view")
 
                 with col_r:
-                    if st.button("❌ Reject", key=f"reject_{item['id']}"):
-                        result, err2 = api(
-                            "post", f"/agent/reject/{item['id']}",
-                            json={"reviewed_by": reviewer}
-                        )
-                        if err2:
-                            st.error(err2)
-                        else:
-                            st.success("Rejected. Price unchanged.")
-                            time.sleep(1)
-                            st.rerun()
+                    st.button("❌ Reject", key=f"reject_{item['id']}",
+                             disabled=True,
+                             help="Disabled in public view")
 
 
 # ── Metrics ───────────────────────────────────────────────────────────
