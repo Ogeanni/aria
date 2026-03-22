@@ -1,6 +1,6 @@
 # ARIA — Autonomous Repricing & Inventory Agent
 
-ARIA is an AI agentic system that autonomously monitors competitor prices, detects repricing opportunities, and executes price changes with little to no human intervention unless. Every decision is audited, large changes require human approval, and the system learns from outcomes over time.
+ARIA is an AI agentic system that autonomously monitors competitor prices, detects repricing opportunities, and executes price changes with little to no human intervention. Every decision is audited, large changes require human approval, and the system learns from outcomes over time.
 
 **Live demo:**
 - API + Swagger UI: https://aria-production-6e33.up.railway.app/docs
@@ -12,7 +12,7 @@ ARIA is an AI agentic system that autonomously monitors competitor prices, detec
 
 ARIA runs on a schedule, 24/7. Every hour it:
 
-1. It checks what competitors prices are across 18 products
+1. It checks what competitors' prices are across 18 products
 2. It checks Google Trends demand signals for each category (Electronics, Home Goods, Fashion, and Sports)
 3. It routes every product through a three-layer decision architecture
 4. It executes price changes within approved limits automatically
