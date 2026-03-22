@@ -339,8 +339,7 @@ elif page == "✅ Approvals":
                     st.info(item["reasoning"])
 
                 col_a, col_r = st.columns(2)
-                reviewer = st.text_input("Your name", value="reviewer",
-                                         key=f"name_{item['id']}")
+                reviewer = "admin"
 
                 with col_a:
                     st.button("✅ Approve", key=f"approve_{item['id']}",
