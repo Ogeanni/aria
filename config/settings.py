@@ -151,11 +151,8 @@ class Settings(BaseSettings):
     class Config:
         env_file = str(ROOT / ".env")
         env_file_encoding = "utf-8"
+        case_sensitive = False
         extra = "ignore"   # ignore unknown env vars like POSTGRES_USER etc
-        # Environment variables take priority over .env file.
-        # This is the industry standard — allows overriding .env
-        # via shell export or CI/CD secrets without editing files.
-        # e.g. export DATABASE_URL=... overrides .env DATABASE_URL
         env_nested_delimiter = "__"
 
     @classmethod
@@ -177,8 +174,6 @@ class Settings(BaseSettings):
             env_settings,
             dotenv_settings,
         )
-        case_sensitive = False
-        extra = "ignore"
 
 
 @lru_cache(maxsize=1)
